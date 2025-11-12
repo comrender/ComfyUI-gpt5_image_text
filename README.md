@@ -1,6 +1,6 @@
 # ComfyUI-GPT5_Image_Text
 
-A powerful **ComfyUI custom node** for **vision + text analysis** using **GPT-5 (and GPT-4o)** with **direct API key input**, **system prompt**, **temperature**, **max tokens**, and **multi-image support**.
+A **ComfyUI custom node** for **vision + text analysis** using **GPT-5 (and GPT-4o)** with **direct API key input**, **system prompt**, **temperature**, **max tokens**, and **multi-image support**.
 
 Perfect for:
 - Image captioning
@@ -11,9 +11,6 @@ Perfect for:
 
 No image generation or editing — **pure analysis only**.
 
-<img width="958" height="452" alt="GPT5 Image & Text Node" src="https://github.com/user-attachments/assets/placeholder-gpt5-node-ui.png" />
-
-> *(Replace with your own screenshot once the node is in ComfyUI)*
 
 ---
 
