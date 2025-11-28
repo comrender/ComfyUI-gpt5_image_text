@@ -26,10 +26,10 @@ class GPT5ImageText:
             "required": {
                 "prompt": ("STRING", {"default": "Analyze this image and text.", "multiline": True}),
                 "system_prompt": ("STRING", {"default": "You are a helpful assistant.", "multiline": True}),
-                "model": (["gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview"],),  # Updated for 2025 models
+                "model": (["gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview"],),
                 "openai_key": ("STRING", {"default": "your_openai_key_here"}),
                 "temperature": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 2.0, "step": 0.1}),
-                "max_tokens": ("INT", {"default": 1024, "min": 1, "max": 16384, "step": 1}),  # Increased max for GPT-5
+                "max_tokens": ("INT", {"default": 1024, "min": 1, "max": 16384, "step": 1}),
             },
             "optional": {
                 "image": ("IMAGE",),
@@ -42,7 +42,7 @@ class GPT5ImageText:
     CATEGORY = "openai/analysis"
     OUTPUT_NODE = True
 
-def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tokens, image=None):
+    def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tokens, image=None):
         if openai_key == "your_openai_key_here":
             raise ValueError("Please set your OpenAI API key in the node.")
         
@@ -51,7 +51,7 @@ def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tok
         
         if image is not None:
             batch_size = image.shape[0] if len(image.shape) == 4 else 1
-            for b in range(min(batch_size, 10)):
+            for b in range(min(batch_size, 10)):  # OpenAI limit: ~10 images
                 single_image = image[b:b + 1] if batch_size > 1 else image
                 pil_image = tensor2pil(single_image)
                 buffer = BytesIO()
@@ -77,9 +77,10 @@ def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tok
         }
 
         # 3. ONLY add temperature if it is NOT a reasoning model
+        # This prevents the "Unsupported value" error for gpt-5/o1
         if not is_reasoning_model:
             api_kwargs["temperature"] = temperature
-
+        
         try:
             # 4. Unpack arguments into the function call
             response = client.chat.completions.create(**api_kwargs)
