@@ -42,19 +42,16 @@ class GPT5ImageText:
     CATEGORY = "openai/analysis"
     OUTPUT_NODE = True
 
-    def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tokens, image=None):
+def analyze(self, prompt, system_prompt, model, openai_key, temperature, max_tokens, image=None):
         if openai_key == "your_openai_key_here":
             raise ValueError("Please set your OpenAI API key in the node.")
-        
-        # Dynamically select token param based on model (fixes the error)
-        token_param = "max_completion_tokens" if model == "gpt-5" or model.startswith("o1-") else "max_tokens"
         
         client = openai.OpenAI(api_key=openai_key)
         user_content = [{"type": "text", "text": prompt}]
         
         if image is not None:
             batch_size = image.shape[0] if len(image.shape) == 4 else 1
-            for b in range(min(batch_size, 10)):  # OpenAI limit: ~10 images
+            for b in range(min(batch_size, 10)):
                 single_image = image[b:b + 1] if batch_size > 1 else image
                 pil_image = tensor2pil(single_image)
                 buffer = BytesIO()
@@ -65,16 +62,27 @@ class GPT5ImageText:
                     "image_url": {"url": f"data:image/png;base64,{img_str}"}
                 })
         
+        # 1. Determine the correct token parameter name
+        is_reasoning_model = model == "gpt-5" or model.startswith("o1-")
+        token_param = "max_completion_tokens" if is_reasoning_model else "max_tokens"
+
+        # 2. Build the API arguments dictionary
+        api_kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            token_param: max_tokens, # Dynamically injects max_tokens or max_completion_tokens
+        }
+
+        # 3. ONLY add temperature if it is NOT a reasoning model
+        if not is_reasoning_model:
+            api_kwargs["temperature"] = temperature
+
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
-                temperature=temperature,
-                **{token_param: max_tokens},  # Dynamic param injection
-            )
+            # 4. Unpack arguments into the function call
+            response = client.chat.completions.create(**api_kwargs)
             
             if not response.choices or response.choices[0].message.content is None:
                 raise ValueError("No content in response")
