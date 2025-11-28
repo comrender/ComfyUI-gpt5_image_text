@@ -26,10 +26,12 @@ class GPT5ImageText:
             "required": {
                 "prompt": ("STRING", {"default": "Analyze this image and text.", "multiline": True}),
                 "system_prompt": ("STRING", {"default": "You are a helpful assistant.", "multiline": True}),
+                # Updated model list to include 2025 models
                 "model": (["gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview"],),
                 "openai_key": ("STRING", {"default": "your_openai_key_here"}),
                 "temperature": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 2.0, "step": 0.1}),
-                "max_tokens": ("INT", {"default": 1024, "min": 1, "max": 16384, "step": 1}),
+                # INCREASED default max_tokens to 4096 to accommodate reasoning models
+                "max_tokens": ("INT", {"default": 4096, "min": 1, "max": 16384, "step": 1}),
             },
             "optional": {
                 "image": ("IMAGE",),
@@ -49,6 +51,7 @@ class GPT5ImageText:
         client = openai.OpenAI(api_key=openai_key)
         user_content = [{"type": "text", "text": prompt}]
         
+        # Handle Image Input
         if image is not None:
             batch_size = image.shape[0] if len(image.shape) == 4 else 1
             for b in range(min(batch_size, 10)):  # OpenAI limit: ~10 images
@@ -62,33 +65,47 @@ class GPT5ImageText:
                     "image_url": {"url": f"data:image/png;base64,{img_str}"}
                 })
         
-        # 1. Determine the correct token parameter name
+        # 1. Detect Model Type (Reasoning vs Standard)
+        # GPT-5 and o1-preview are "reasoning" models
         is_reasoning_model = model == "gpt-5" or model.startswith("o1-")
+        
+        # 2. Select correct token parameter
+        # Reasoning models use "max_completion_tokens", others use "max_tokens"
         token_param = "max_completion_tokens" if is_reasoning_model else "max_tokens"
 
-        # 2. Build the API arguments dictionary
+        # 3. Build API Arguments
         api_kwargs = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            token_param: max_tokens, # Dynamically injects max_tokens or max_completion_tokens
+            token_param: max_tokens, # Dynamically uses the correct param name
         }
 
-        # 3. ONLY add temperature if it is NOT a reasoning model
-        # This prevents the "Unsupported value" error for gpt-5/o1
+        # 4. Conditionally add temperature
+        # Reasoning models do NOT support temperature (must be 1 or default)
         if not is_reasoning_model:
             api_kwargs["temperature"] = temperature
-        
+
         try:
-            # 4. Unpack arguments into the function call
+            # Execute API Call
             response = client.chat.completions.create(**api_kwargs)
+            choice = response.choices[0]
             
-            if not response.choices or response.choices[0].message.content is None:
-                raise ValueError("No content in response")
+            # 5. Check for "Silent Failure" (Context Length)
+            # If the model runs out of tokens while "reasoning", content will be empty
+            if choice.finish_reason == "length" and not choice.message.content:
+                raise ValueError(
+                    f"Model ran out of tokens while reasoning! The current limit ({max_tokens}) is too low for {model}. "
+                    "Please increase 'max_tokens' in the node settings."
+                )
+
+            if not choice.message.content:
+                raise ValueError("No content in response.")
             
-            return (response.choices[0].message.content.strip(),)
+            return (choice.message.content.strip(),)
             
         except openai.OpenAIError as e:
+            # Catch API errors (400, 401, 500, etc.)
             raise ValueError(f"OpenAI API error: {str(e)}. Check model/token limits.")
